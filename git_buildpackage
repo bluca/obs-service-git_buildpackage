@@ -203,6 +203,52 @@ def copy_source_package(input_dir, output_dir):
             shutil.copy(input_file, output_file)
 
 
+def obs_scm_cached_clone(args):
+    """Use obs_scm to do a cached clone and checkout. Returns clone directory or None"""
+
+    try:
+        sys.path.append(os.path.dirname('/usr/lib/obs/service/TarSCM'))
+        from TarSCM.tasks import Tasks
+        from TarSCM.cli import Cli
+    except ImportError:
+        try:
+            from TarSCM.tasks import tasks as Tasks
+            from TarSCM.cli import cli as Cli
+        except ImportError:
+            return None
+
+    # obs_scm has a lot of parameters, we want defaults for everything
+    # use_obs_scm and scm do not have defaults
+    cli = Cli()
+    argv = ["--url", args.url, "--revision", args.revision, "--outdir", args.outdir]
+    cli.parse_args(argv)
+    # avoid creating a package.tar that will confuse obs-build
+    cli.use_obs_scm = True
+    # do not override the repository version
+    cli.version = "_none_"
+    cli.scm = 'git'
+
+    # the task class is the main entry point of the libraries, and by
+    # setting scm to git and use_obs_scm to True it will clone and
+    # create the obs_cpio file.
+    # The Tasks class was refactored in 0.8.0.
+    try:
+        obs_scm = Tasks(cli)
+        obs_scm.generate_list()
+        obs_scm.process_list()
+        obs_scm.finalize()
+    except TypeError:
+        obs_scm = Tasks()
+        obs_scm.generate_list(cli)
+        obs_scm.process_list()
+        obs_scm.finalize(cli)
+
+    # unlocks the cache and removes the temporary sparse clone
+    atexit.register(obs_scm.cleanup)
+
+    return obs_scm.scm_object.clone_dir
+
+
 if __name__ == '__main__':
     FORMAT = "%(message)s"
     logging.basicConfig(format=FORMAT, stream=sys.stderr, level=logging.INFO)
@@ -243,6 +289,9 @@ if __name__ == '__main__':
     parser.add_argument('--dch-release-update', choices=['enable', 'disable'],
                         default='disable',
                         help='Append OBS release number')
+    parser.add_argument('--cache', choices=['enable', 'disable'],
+                        default='enable',
+                        help='use pre-cached git clone directory (requires obs_scm)')
 
     parser.add_argument('--verbose', '-v', action='store_true',
                         help='enable verbose output')
@@ -284,11 +333,23 @@ if __name__ == '__main__':
         repodir = tempfile.mkdtemp(dir=args.outdir)
         CLEANUP_DIRS.append(repodir)
 
-    # initial_clone
-    clone_dir = fetch_upstream(args.url, args.revision, repodir)
+    clone_dir = None
 
-    # switch_to_revision
-    revision = switch_revision(clone_dir, args.revision)
+    # if obs_scm created a cached (bare) repository, clone from it
+    # git uses hard links  when cloning locally, so even with very
+    # large repositories it should be very efficient
+    if args.cache == 'enable':
+        # The temporary sparse clone done by obs_scm already has the
+        # right version, so no need to switch again
+        revision = 'WC'
+        clone_dir = obs_scm_cached_clone(args)
+
+    if clone_dir is None:
+        # initial_clone
+        clone_dir = fetch_upstream(args.url, args.revision, repodir)
+
+        # switch_to_revision
+        revision = switch_revision(clone_dir, args.revision)
 
     # create_source_package
     create_source_package(clone_dir, repodir, revision=revision,

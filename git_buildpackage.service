@@ -1,7 +1,9 @@
 <service name="git_buildpackage">
   <summary>An OBS service that uses git buildpackage</summary>
   <description>This OBS service is using git buildpackage to create the debian
-  source package.</description>
+  source package.
+  When obs-service-obs_scm is present and --cache is enabled (default), obs_scm
+  cached git clones will be used and shared (keyed on the full URL).</description>
 
   <parameter name="url">
     <description>URL to clone GIT repository from</description>
@@ -47,6 +49,14 @@
 
   <parameter name="dch-release-update">
     <description>Append OBS release number.  Default is 'disable'</description>
+    <allowedvalue>enable</allowedvalue>
+    <allowedvalue>disable</allowedvalue>
+  </parameter>
+
+  <parameter name="cache">
+    <description>If enabled, and if a cached repository created by obs_scm exists,
+    it will be used. Caches are keyed on the full repository URL.
+    Requires obs-service-obs_scm. Default is 'enable'</description>
     <allowedvalue>enable</allowedvalue>
     <allowedvalue>disable</allowedvalue>
   </parameter>

@@ -28,6 +28,7 @@ Requires:       gawk
 Requires:       git-buildpackage >= 0.6.0
 Requires:       fakeroot
 Requires:       devscripts
+Recommends:     obs-service-obs_scm >= 0.6
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 BuildArch:      noarch
 

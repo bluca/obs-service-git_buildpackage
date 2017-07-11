@@ -9,5 +9,6 @@ Package: obs-service-git-buildpackage
 Section: misc
 Architecture: all
 Depends: ${misc:Depends}, devscripts, fakeroot, git-buildpackage (>= 0.6.0), gawk
+Recommends: obs-service-tar-scm (>= 0.6),
 Description: $prefix OBS source service version
  This package sets up the version for an OBS package build
