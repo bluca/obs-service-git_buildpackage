@@ -22,6 +22,8 @@ import hashlib
 import tempfile
 import logging
 import glob
+import hashlib
+import fcntl
 import ConfigParser
 import StringIO
 
@@ -107,7 +109,7 @@ def switch_revision(clone_dir, revision):
     return revision
 
 
-def fetch_upstream(url, revision, out_dir):
+def fetch_upstream(url, revision, out_dir, git_reference=None):
     """Fetch sources from repository and checkout given revision."""
 
     # calc_dir_to_clone_to
@@ -118,8 +120,13 @@ def fetch_upstream(url, revision, out_dir):
         # initial clone
         os.mkdir(clone_dir)
 
-        safe_run(['git', 'clone', '--no-checkout', url, clone_dir],
-                 cwd=out_dir, interactive=sys.stdout.isatty())
+        command = ['git', 'clone', '--no-checkout', url, clone_dir]
+        # cached repository by obs_scm
+        if git_reference is not None:
+            command.insert(3, '--reference')
+            command.insert(4, git_reference)
+
+        safe_run(command, cwd=out_dir, interactive=sys.stdout.isatty())
     else:
         logging.info("Detected cached repository...")
 #        UPDATE_CACHE_COMMANDS[scm](url, clone_dir, revision)
@@ -203,6 +210,42 @@ def copy_source_package(input_dir, output_dir):
             shutil.copy(input_file, output_file)
 
 
+def obs_scm_cache_from_url(url, config_cache_dir):
+    """Derive cache from url and check if it is present and return it, NONE otherwise."""
+
+    # Adapted from obs_scm/TarSCM/scm/base.py
+    # Each repository is cached in a directory which is named after the
+    # full git URL (utf8) SHA256 sum, which will contain a lock file and the bare git
+    # repository. The cache top level dir might vary.
+    #
+    # check for enabled caches in this order (first wins):
+    #   1. local .cache
+    #   2. environment
+    #   3. user config
+    #   4. system wide
+    cachedir  = None
+    cwd = os.getcwd()
+    if os.path.isdir(os.path.join(cwd, '.cache')):
+        cachedir = os.path.join(cwd, '.cache')
+
+    if cachedir is None:
+        cachedir = os.getenv('CACHEDIRECTORY')
+
+    if cachedir is None:
+        cachedir = config_cache_dir
+
+    if cachedir:
+        logging.debug("REPOCACHE: %s", cachedir)
+        url_hash = hashlib.sha256(url.encode("utf-8")).hexdigest()
+        repodir = os.path.join(cachedir, url_hash)
+        basename = os.path.basename(re.sub(r'\.git$', '', url))
+        repodir = os.path.abspath(os.path.join(repodir, basename))
+        if os.path.isdir(repodir):
+            return repodir
+
+    return None
+
+
 if __name__ == '__main__':
     FORMAT = "%(message)s"
     logging.basicConfig(format=FORMAT, stream=sys.stderr, level=logging.INFO)
@@ -243,6 +286,9 @@ if __name__ == '__main__':
     parser.add_argument('--dch-release-update', choices=['enable', 'disable'],
                         default='disable',
                         help='Append OBS release number')
+    parser.add_argument('--cache-dir', type=str,
+                        default='',
+                        help='obs_scm git repositories cache directory')
 
     parser.add_argument('--verbose', '-v', action='store_true',
                         help='enable verbose output')
@@ -284,8 +330,16 @@ if __name__ == '__main__':
         repodir = tempfile.mkdtemp(dir=args.outdir)
         CLEANUP_DIRS.append(repodir)
 
+    # if obs_scm created a cached (bare) repository, clone from it
+    # git uses hard links  when cloning locally, so even with very
+    # large repositories it should be very efficient
+    if len(args.cache_dir) > 0:
+        git_reference = obs_scm_cache_from_url(args.url, args.cache_dir)
+    else:
+        git_reference = None
+
     # initial_clone
-    clone_dir = fetch_upstream(args.url, args.revision, repodir)
+    clone_dir = fetch_upstream(args.url, args.revision, repodir, git_reference)
 
     # switch_to_revision
     revision = switch_revision(clone_dir, args.revision)

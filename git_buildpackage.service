@@ -1,7 +1,10 @@
 <service name="git_buildpackage">
   <summary>An OBS service that uses git buildpackage</summary>
   <description>This OBS service is using git buildpackage to create the debian
-  source package.</description>
+  source package.
+  It can either do a fresh git clone, when the --url parameter is passed, or
+  use a pre-cloned directory, when --cache is used. The latter is useful
+  when combined with obs_scm, which caches the git repository.</description>
 
   <parameter name="url">
     <description>URL to clone GIT repository from</description>
@@ -49,6 +52,15 @@
     <description>Append OBS release number.  Default is 'disable'</description>
     <allowedvalue>enable</allowedvalue>
     <allowedvalue>disable</allowedvalue>
+  </parameter>
+
+  <parameter name="cache-dir">
+    <description>obs_scm top level cache directory, eg: /var/cache/obs/tar_scm
+    If enabled, and if a cached repository created by obs_scm exists,
+    it will be used. Caches are keyed on the full repository URL.
+    WARNING: you must use this only when chaining after an obs_scm run in _service
+    otherwise the cached repository will not be updated and it will be stale.
+    Default is empty string</description>
   </parameter>
 
 </service>
