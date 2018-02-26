@@ -1,3 +1,15 @@
+obs-service-git-buildpackage (1.7) unstable; urgency=medium
+
+  [ Jan Blunck ]
+  * Add --git-upstream-tree= and --git-no-pristine-tar as safe args
+
+  [ Luca Boccassi ]
+  * Add compatibiity with gbp >+ 0.8 and drop support for < 0.6
+  * Implement support for git submodules
+  * Add --cache option to use obs_scm service clones
+
+ -- Luca Boccassi <bluca@debian.org>  Mon, 26 Feb 2018 13:44:13 +0000
+
 obs-service-git-buildpackage (1.6) unstable; urgency=medium
 
   [ Jan Blunck ]
